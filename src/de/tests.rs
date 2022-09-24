@@ -54,10 +54,40 @@ struct BytesStruct {
     large: Vec<u8>,
 }
 
+// #[test] 
+// fn test_include() {
+//     use std::path::PathBuf;
+//     assert_eq!(Ok(PathBuf::from("poop")), from_str("include <>"));
+// }
+
 #[test]
 fn test_empty_struct() {
     assert_eq!(Ok(EmptyStruct1), from_str("EmptyStruct1"));
     assert_eq!(Ok(EmptyStruct2 {}), from_str("EmptyStruct2{}"));
+}
+
+#[test]
+fn test_new_type_struct() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct NewType(i32);
+    assert_eq!(Ok(NewType(42)), from_str("NewType(42)"));
+    assert_eq!(Ok(NewType(33)), from_str("(33)"));
+}
+
+#[test]
+fn test_unit_struct() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct UnitStruct;
+    // assert_eq!(Ok(UnitStruct), from_str("UnitStruct{}"));
+    assert_eq!(Ok(UnitStruct), from_str("{}"));
+}
+
+#[test]
+fn test_tuple_struct() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct TupleStruct(f32, f32);
+    assert_eq!(Ok(TupleStruct(2.0, 5.0)), from_str("TupleStruct(2,5,)"));
+    assert_eq!(Ok(TupleStruct(3.0, 4.0)), from_str("(3,4)"));
 }
 
 #[test]
@@ -93,7 +123,7 @@ fn test_struct() {
     //     }")
     // );
 
-    let mut my_struct5 = MyStruct5 { x: vec![4, 5] };
+    let my_struct5 = MyStruct5 { x: vec![4, 5] };
     assert_eq!(Ok(my_struct5),
         from_str("MyStruct5 { 
             x: [4, 5],
@@ -107,7 +137,7 @@ fn test_struct() {
     // );
 
 
-    // ?? I think testing undelimited stuff
+    // ?? I think testing undelimited stuff -- maybe remove
     let my_struct4 = MyStruct4 { 
         x: Some(String::from("zme")), 
         y: String::from("rald"), 
@@ -120,23 +150,6 @@ fn test_struct() {
             z: 1.0
         }"
     ));
-
-    // New Type
-    #[derive(Debug, PartialEq, Deserialize)]
-    struct NewType(i32);
-    assert_eq!(Ok(NewType(42)), from_str("NewType(42)"));
-    assert_eq!(Ok(NewType(33)), from_str("(33)"));
-
-    #[derive(Debug, PartialEq, Deserialize)]
-    struct UnitStruct;
-    // assert_eq!(Ok(UnitStruct), from_str("UnitStruct{}"));
-    assert_eq!(Ok(UnitStruct), from_str("{}"));
-
-    // Tuple Struct
-    #[derive(Debug, PartialEq, Deserialize)]
-    struct TupleStruct(f32, f32);
-    assert_eq!(Ok(TupleStruct(2.0, 5.0)), from_str("TupleStruct(2,5,)"));
-    assert_eq!(Ok(TupleStruct(3.0, 4.0)), from_str("(3,4)"));
 }
 
 #[test]
@@ -149,8 +162,8 @@ fn test_option() {
 fn test_enum() {
     assert_eq!(Ok(MyEnum::A), from_str("A"));
     assert_eq!(Ok(MyEnum::B(true)), from_str("B(true,)"));
-    assert_eq!(Ok(MyEnum::C(true, 3.5)), from_str("C(true,3.5,)"));
-    assert_eq!(Ok(MyEnum::D { a: 2, b: 3 }), from_str("D{a:2,b:3,}"));
+    assert_eq!(Ok(MyEnum::C(true, 3.5)), from_str("C(true,3.5)"));
+    assert_eq!(Ok(MyEnum::D{ a: 2, b: 3 }), from_str("D{a:2,b:3,}"));
 }
 
 #[test]
@@ -166,12 +179,6 @@ fn test_array() {
     assert_eq!(Ok([String::from("zme"), String::from("rald")].to_vec()), from_str("[\"zme\",rald]"));
     assert_eq!(Ok([String::from("a"), String::from("b"), String::from("he lo")].to_vec()), from_str("[a,   b,      \"he lo\"]"));
 }
-
-// #[test] 
-// fn test_include() {
-//     use std::path::PathBuf;
-//     assert_eq!(Ok(PathBuf::from("poop")), from_str("include <>"));
-// }
 
 #[test]
 fn test_map() {
@@ -197,28 +204,28 @@ fn test_map() {
         }")
     );
 
-    //nested map with cavetta construct (mostly maps within structs)
-    // Key1 value1[<Key2> <Value2>]
-    let mut map_holder = HashMap::new();
-    let mut map2 = HashMap::new();
-    map2.insert(4, 5);
-    map_holder.insert("first", map2);
-    assert_eq!(Ok(map_holder),
-        from_str("{
-            first <4> 5;
-        }")
-    );
+    // Nested map with cavetta construct (mostly maps within structs)
+    // Schema: Key1 value1[<Key2> <Value2>]
+    // let mut map_holder = HashMap::new();
+    // let mut map2 = HashMap::new();
+    // map2.insert(4, 5);
+    // map_holder.insert("first", map2);
+    // assert_eq!(Ok(map_holder),
+    //     from_str("{
+    //         first <4> 5;
+    //     }")
+    // );
 
-    let my_struct = MyStruct { x: 4.0, y: 7.0 };
-    let mut map_holder = HashMap::new();
-    let mut map2 = HashMap::new();
-    map2.insert(4, my_struct);
-    map_holder.insert("first", map2);
-    assert_eq!(Ok(map_holder),
-        from_str("{
-            \"first\" <4> { x:4, y:7 };
-        }")
-    );
+    // let my_struct = MyStruct { x: 4.0, y: 7.0 };
+    // let mut map_holder = HashMap::new();
+    // let mut map2 = HashMap::new();
+    // map2.insert(4, my_struct);
+    // map_holder.insert("first", map2);
+    // assert_eq!(Ok(map_holder),
+    //     from_str("{
+    //         \"first\" <4> { x:4, y:7 };
+    //     }")
+    // );
 }
 
 #[test]
