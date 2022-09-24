@@ -116,7 +116,7 @@ impl<'de> Deserializer<'de> {
     pub fn from_bytes(input: &'de [u8]) -> Result<Self> {
         let deserializer = Deserializer {
             bytes: Bytes::new(input)?,
-        }.conjure()?;
+        };//.conjure()?;
 
         Ok(deserializer)
     }
@@ -406,9 +406,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         } 
 
         // if V::Value::Unit.is_nested() {
-            let value = visitor.visit_map(CommaSeparated::new(b';', &mut self))?;
-            self.bytes.consume(";");
-            return Ok(value);
+            // let value = visitor.visit_map(CommaSeparated::new(b';', &mut self))?;
+            // self.bytes.consume(";");
+            // return Ok(value);
         // }
 
         return self.bytes.err(ErrorCode::ExpectedMap);
@@ -543,8 +543,8 @@ impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
         } else {
 
             // if nested_map {
-                let res = seed.deserialize(&mut TagDeserializer::new(&mut *self.de))?;
-                return Ok(res);  
+                // let res = seed.deserialize(&mut TagDeserializer::new(&mut *self.de))?;
+                // return Ok(res);  
             // }  
 
             self.err(ErrorCode::ExpectedMapSeparator)

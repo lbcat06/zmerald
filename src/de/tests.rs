@@ -62,72 +62,81 @@ fn test_empty_struct() {
 
 #[test]
 fn test_struct() {
-    #[derive(Debug, PartialEq, Deserialize)]
-    struct UnitStruct;
-
-    // assert_eq!(Ok(UnitStruct), from_str("UnitStruct{}"));
-    assert_eq!(Ok(UnitStruct), from_str("{}"));
-
-
-    let my_struct = MyStruct { x: 4.0, y: 7.0 };
-    
-    assert_eq!(Ok(my_struct), from_str("MyStruct{x:4,y:7,}"));
+    let my_struct = MyStruct { x: 4.0, y: 7.0 };    
+    assert_eq!(Ok(my_struct), from_str("MyStruct {x:4,y:7,}"));
     assert_eq!(Ok(my_struct), from_str("{x:4,y:7}"));
     assert_eq!(Ok(my_struct),
-        from_str("MyStruct{ 
+        from_str("MyStruct { 
             <x> 4,
             <y> 7
         }")
     );
 
-    // let mut my_struct3 = MyStruct3 { x: HashMap::new() };
-    // my_struct3.x.insert(4, 4);
-    // my_struct3.x.insert(5, 5);
+    //Map inside Struct
+    let my_struct2 = MyStruct2 { 
+        x: HashMap::from([(4,7),(5,9)]), 
+        y: 7 
+    };
+    
+    assert_eq!(Ok(my_struct2), 
+        from_str("MyStruct2{
+            x: {4:7,5:9},
+            y: 7
+        }"
+    ));
 
-    // // using nested cavetta construct
+    // Nested Cavetta Construct
     // assert_eq!(Ok(my_struct3),
     //     from_str("MyStruct3{ 
-    //         x <4> 4;
-    //         x <5> 5;
+    //         x <4> 7;
+    //         x <5> 9;
+    //     }")
+    // );
+
+    let mut my_struct5 = MyStruct5 { x: vec![4, 5] };
+    assert_eq!(Ok(my_struct5),
+        from_str("MyStruct5 { 
+            x: [4, 5],
+        }")
+    );
+    // assert_eq!(Ok(my_struct5.clone()),
+    //     from_str("MyStruct5 { 
+    //         x: [4],
+    //         x: [5]
     //     }")
     // );
 
 
-    let mut my_struct5 = MyStruct5 { x: Vec::new() };
-    my_struct5.x.push(4);
-    my_struct5.x.push(5);
+    // ?? I think testing undelimited stuff
+    let my_struct4 = MyStruct4 { 
+        x: Some(String::from("zme")), 
+        y: String::from("rald"), 
+        z: 1.0 
+    };
+    assert_eq!(Ok(my_struct4), 
+        from_str("MyStruct4 {
+            x: zme,
+            y: rald,
+            z: 1.0
+        }"
+    ));
 
-    assert_eq!(Ok(my_struct5),
-        from_str("MyStruct5{ 
-            x: [4],
-            x: [5]
-        }")
-    );
-
-
-    let my_struct4 = MyStruct4 { x: Some(String::from("zme")), y: String::from("rald"), z: 1.0 };
-    assert_eq!(Ok(my_struct4), from_str("MyStruct4{x:zme,y: rald,z:1.0}"));
-
-
+    // New Type
     #[derive(Debug, PartialEq, Deserialize)]
     struct NewType(i32);
-
     assert_eq!(Ok(NewType(42)), from_str("NewType(42)"));
     assert_eq!(Ok(NewType(33)), from_str("(33)"));
 
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct UnitStruct;
+    // assert_eq!(Ok(UnitStruct), from_str("UnitStruct{}"));
+    assert_eq!(Ok(UnitStruct), from_str("{}"));
 
+    // Tuple Struct
     #[derive(Debug, PartialEq, Deserialize)]
     struct TupleStruct(f32, f32);
-
     assert_eq!(Ok(TupleStruct(2.0, 5.0)), from_str("TupleStruct(2,5,)"));
     assert_eq!(Ok(TupleStruct(3.0, 4.0)), from_str("(3,4)"));
-
-
-    //Map inside Struct
-    let mut map = HashMap::new();
-    map.insert(4, 7);
-    let my_struct2 = MyStruct2 { x:map, y: 7 };
-    assert_eq!(Ok(my_struct2), from_str("MyStruct2{x:{4:7},y:7}"));
 }
 
 #[test]
@@ -199,7 +208,6 @@ fn test_map() {
             first <4> 5;
         }")
     );
-
 
     let my_struct = MyStruct { x: 4.0, y: 7.0 };
     let mut map_holder = HashMap::new();
