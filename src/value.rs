@@ -1,3 +1,5 @@
+use crate::{ error::Error, error::Result };
+
 use serde::{
     de::{ DeserializeOwned, DeserializeSeed, Deserializer, Error as SerdeError, MapAccess, SeqAccess, Visitor },
     forward_to_deserialize_any, Deserialize, Serialize,
@@ -10,7 +12,6 @@ use std::{
     ops::{ Index, IndexMut },
 };
 
-use crate::de::{ Error as ZmeraldError, Result };
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(transparent)]
@@ -259,7 +260,7 @@ impl Value {
 }
 
 impl<'de> Deserializer<'de> for Value {
-    type Error = ZmeraldError;
+    type Error = Error;
 
     forward_to_deserialize_any! {
         bool f32 f64 char str string bytes
@@ -309,7 +310,7 @@ impl<'de> Deserializer<'de> for Value {
     where V: Visitor<'de> {
         match self {
             Value::Number(Number::Integer(i)) => visitor.visit_i64(i),
-            v => Err(ZmeraldError::custom(format!("Expected a number, got {:?}", v))),
+            v => Err(Error::Message(format!("Expected a number, got {:?}", v))),
         }
     }
 
@@ -332,7 +333,7 @@ impl<'de> Deserializer<'de> for Value {
     where V: Visitor<'de> {
         match self {
             Value::Number(Number::Integer(i)) => visitor.visit_u64(i as u64),
-            v => Err(ZmeraldError::custom(format!("Expected a number, got {:?}", v))),
+            v => Err(Error::Message(format!("Expected a number, got {:?}", v))),
         }
     }
 }
@@ -343,7 +344,7 @@ struct MapAccessor {
 }
 
 impl<'de> MapAccess<'de> for MapAccessor {
-    type Error = ZmeraldError;
+    type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where K: DeserializeSeed<'de> {
@@ -368,7 +369,7 @@ struct Seq {
 }
 
 impl<'de> SeqAccess<'de> for Seq {
-    type Error = ZmeraldError;
+    type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where T: DeserializeSeed<'de> {

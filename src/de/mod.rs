@@ -1,39 +1,35 @@
 mod value;
 
+#[cfg(test)]
+mod tests;
+
 mod id;
 pub use id::IdDeserializer;
 
 mod tag;
 pub use tag::TagDeserializer;
 
-#[cfg(test)]
-mod tests;
-
-pub use crate::error::{ Error, ErrorCode, Position, Result };
-use serde::de::{ self, DeserializeSeed, Deserializer as SerdeError, Visitor };
+use crate::error::{ Error, Position, SpannedError, Result, SpannedResult };
 use crate::parse::{ AnyNum, Bytes, ParsedStr };
-use std::{ borrow::Cow, io, str};
-use crate::value::Value;
-use std::collections::HashMap;
-use std::io::{ Read, BufReader };
-use std::fs::File;
+use serde::de::{ self, DeserializeSeed, Deserializer as SerdeError, Visitor };
+use std::{ borrow::Cow, io, str };
 
-pub fn from_reader<R, T>(mut rdr: R) -> Result<T> where R: io::Read, T: de::DeserializeOwned {
+pub fn from_reader<R, T>(mut rdr: R) -> SpannedResult<T> where R: std::io::Read, T: de::DeserializeOwned {
     let mut bytes = Vec::new();
     rdr.read_to_end(&mut bytes)?;
 
     from_bytes(&bytes)
 }
 
-pub fn from_str<'a, T>(s: &'a str) -> Result<T> where T: de::Deserialize<'a> {
+pub fn from_str<'a, T>(s: &'a str) -> SpannedResult<T> where T: de::Deserialize<'a> {
     from_bytes(s.as_bytes())
 }
 
-pub fn from_bytes<'a, T>(s: &'a [u8]) -> Result<T> where T: de::Deserialize<'a> {
+pub fn from_bytes<'a, T>(s: &'a [u8]) -> SpannedResult<T> where T: de::Deserialize<'a> {
     from_bytes_seed(s, std::marker::PhantomData)
 }
 
-pub fn from_reader_seed<R, S, T>(mut rdr: R, seed: S) -> Result<T>
+pub fn from_reader_seed<R, S, T>(mut rdr: R, seed: S) -> SpannedResult<T>
 where R: io::Read, S: for<'a> de::DeserializeSeed<'a, Value = T> {
     let mut bytes = Vec::new();
     rdr.read_to_end(&mut bytes)?;
@@ -41,16 +37,16 @@ where R: io::Read, S: for<'a> de::DeserializeSeed<'a, Value = T> {
     from_bytes_seed(&bytes, seed)
 }
 
-pub fn from_str_seed<'a, S, T>(s: &'a str, seed: S) -> Result<T>
+pub fn from_str_seed<'a, S, T>(s: &'a str, seed: S) -> SpannedResult<T>
 where S: de::DeserializeSeed<'a, Value = T> {
     from_bytes_seed(s.as_bytes(), seed)
 }
 
-pub fn from_bytes_seed<'a, S, T>(s: &'a [u8], seed: S) -> Result<T>
+pub fn from_bytes_seed<'a, S, T>(s: &'a [u8], seed: S) -> SpannedResult<T>
 where S: de::DeserializeSeed<'a, Value = T> {
     let mut deserializer = Deserializer::from_bytes(s)?;
-    let value = seed.deserialize(&mut deserializer)?;
-    deserializer.end()?;
+    let value = seed.deserialize(&mut deserializer).map_err(|e| deserializer.span_error(e))?;
+    deserializer.end().map_err(|e| deserializer.span_error(e))?;
 
     Ok(value)
 }
@@ -60,60 +56,11 @@ pub struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
-    pub fn conjure(mut self) -> Result<Self> {
-        let len = self.bytes.bytes().iter().take_while(|&&b| b!='{' as u8).count();
-        for b in 0..len {
-            self.deserialize_include();
-            self.deserialize_variables();
-        }
-
-        Ok(self)
-    }
-
-    pub fn deserialize_include(&mut self) -> Result<()> {
-        if let Some(path) = self.bytes.include()? {
-            //remove closing bracket from current bytes
-            let i = self.bytes.bytes().iter().rev().take_while(|&&b | b!='}' as u8).count();
-            let new_len = self.bytes.bytes().len()-i;
-            self.bytes.set_len(new_len);
-
-            // append new bytes to bottom of original file 
-            let file = File::open(path)?;
-            let mut reader = BufReader::new(file);
-            let mut bytes_rdr = Vec::new();
-            reader.read_to_end(&mut bytes_rdr)?;
-
-            let mut bytes = Bytes::new(&bytes_rdr)?;
-            loop {
-                if bytes.consume("{") {
-                    break;
-                }
-
-                bytes.advance_single();
-            }
-
-            // lifetime issue here
-            // self.bytes.append(bytes.bytes());
-        }
-
-        Ok(())
-    } 
-
-    pub fn deserialize_variables(&mut self) -> Result<()> {
-        if let Some((name, var)) = self.bytes.dollar()? {
-            //replace all instances of name with var
-        }
-
-        Ok(())
-    } 
-}
-
-impl<'de> Deserializer<'de> {
-    pub fn from_str(input: &'de str) -> Result<Self> {
+    pub fn from_str(input: &'de str) -> SpannedResult<Self> {
         Self::from_bytes(input.as_bytes())
     }
 
-    pub fn from_bytes(input: &'de [u8]) -> Result<Self> {
+    pub fn from_bytes(input: &'de [u8]) -> SpannedResult<Self> {
         let deserializer = Deserializer {
             bytes: Bytes::new(input)?,
         };//.conjure()?;
@@ -124,19 +71,30 @@ impl<'de> Deserializer<'de> {
     pub fn remainder(&self) -> Cow<'_, str> {
         String::from_utf8_lossy(self.bytes.bytes())
     }
+
+    pub fn span_error(&self, code: Error) -> SpannedError {
+        self.bytes.span_error(code)
+    }
 }
 
 impl<'de> Deserializer<'de> {
+    /// Check if the remaining bytes are whitespace only,
+    /// otherwise return an error.
     pub fn end(&mut self) -> Result<()> {
         self.bytes.skip_ws()?;
 
         if self.bytes.bytes().is_empty() {
             Ok(())
         } else {
-            self.bytes.err(ErrorCode::TrailingCharacters)
+            Err(Error::TrailingCharacters)
         }
     }
 
+    /// Called from `deserialize_any` when a struct was detected. Decides if
+    /// there is a unit, tuple or usual struct and deserializes it
+    /// accordingly.
+    ///
+    /// This method assumes there is no identifier left.
     fn handle_other_structs<V>(&mut self, visitor: V) -> Result<V::Value>
     where V: Visitor<'de> {
         let mut bytes = self.bytes;
@@ -147,23 +105,58 @@ impl<'de> Deserializer<'de> {
             if bytes.check_tuple_struct()? {
                 self.deserialize_tuple(0, visitor)
             } else {
-               self.bytes.err(ErrorCode::ExpectedTupleStruct) 
+               Err(Error::ExpectedTupleStruct) 
             }
         } else {
             visitor.visit_unit()
         }
     }
+
+    // Called from `deserialize_struct`, `struct_variant`, and `handle_any_struct`.
+    // Handles deserialising the enclosing parentheses and everything in between.
+    //
+    // This method assumes there is no struct name identifier left.
+    // fn handle_struct_after_name<V>(&mut self, name_for_pretty_errors_only: &'static str, visitor: V) -> Result<V::Value>
+    // where V: Visitor<'de> {
+    //     if self.bytes.consume("(") {
+    //         let value = visitor
+    //             .visit_map(CommaSeparated::new(b')', self))
+    //             .map_err(|err| {
+    //                 struct_error_name(
+    //                     err,
+    //                     if !name_for_pretty_errors_only.is_empty() {
+    //                         Some(name_for_pretty_errors_only)
+    //                     } else {
+    //                         None
+    //                     },
+    //                 )
+    //             })?;
+
+    //         self.bytes.comma()?;
+
+    //         if self.bytes.consume(")") {
+    //             Ok(value)
+    //         } else {
+    //             Err(Error::ExpectedStructEnd)
+    //         }
+    //     } else if name_for_pretty_errors_only.is_empty() {
+    //         Err(Error::ExpectedStruct)
+    //     } else {
+    //         Err(Error::ExpectedNamedStruct(name_for_pretty_errors_only))
+    //     }
+    // }
 }
 
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume_ident("true") {
             return visitor.visit_bool(true);
         } else if self.bytes.consume_ident("false") {
             return visitor.visit_bool(false);
+        } else if self.bytes.check_ident("Some") {
+            return self.deserialize_option(visitor);
         } else if self.bytes.consume_ident("None") {
             return visitor.visit_none();
         } else if self.bytes.consume("()") {
@@ -200,131 +193,124 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 }
             },
 
+            b'{' | b'<' => self.deserialize_map(visitor),
+            b'"' | b'r' => self.deserialize_string(visitor),
             b'(' => self.handle_other_structs(visitor),
             b'[' => self.deserialize_seq(visitor),
-            b'{' | b'<' => self.deserialize_map(visitor),
             b'.' => self.deserialize_f64(visitor),
-            b'"' => self.deserialize_string(visitor),
             b'\'' => self.deserialize_char(visitor),
-            other => self.bytes.err(ErrorCode::UnexpectedByte(other as char))
+            other => Err(Error::UnexpectedByte(other as char))
         }
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_bool(self.bytes.bool()?)
     }
 
-    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_i8(self.bytes.signed_integer()?)
     }
 
-    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_i16(self.bytes.signed_integer()?)
     }
 
-    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_i32(self.bytes.signed_integer()?)
     }
 
-    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_i64(self.bytes.signed_integer()?)
     }
 
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_u8(self.bytes.unsigned_integer()?)
     }
 
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_u16(self.bytes.unsigned_integer()?)
     }
 
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_u32(self.bytes.unsigned_integer()?)
     }
 
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_u64(self.bytes.unsigned_integer()?)
     }
 
-    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_f32(self.bytes.float()?)
     }
 
-    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_f64(self.bytes.float()?)
     }
 
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         visitor.visit_char(self.bytes.char()?)
     }
 
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         match self.bytes.string()? {
             ParsedStr::Allocated(s) => visitor.visit_string(s),
             ParsedStr::Slice(s) => visitor.visit_borrowed_str(s),
         }
     }
 
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.deserialize_byte_buf(visitor)
     }
 
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         let res = {
             let string = self.bytes.string()?;
             let base64_str = match string {
                 ParsedStr::Allocated(ref s) => s.as_str(),
                 ParsedStr::Slice(s) => s,
             };
+
             base64::decode(base64_str)
         };
 
         match res {
             Ok(byte_buf) => visitor.visit_byte_buf(byte_buf),
-            Err(err) => self.bytes.err(ErrorCode::Base64Error(err)),
+            Err(err) => Err(Error::Base64Error(err)),
         }
     }
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("None") {
-            return visitor.visit_none();
+            visitor.visit_none()
+        } else if self.bytes.consume("Some") && { self.bytes.skip_ws()?; self.bytes.consume("(") } {
+            self.bytes.skip_ws()?;
+            let v = visitor.visit_some(&mut *self)?;
+            self.bytes.skip_ws()?;
+
+            if self.bytes.consume(")") {
+                Ok(v)
+            } else {
+                Err(Error::ExpectedOptionEnd)
+            }
         } else {
-            return visitor.visit_some(&mut *self);
+            visitor.visit_some(&mut *self)
         }
     }
 
-    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    // In Serde, unit means an anonymous value containing no data
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("{}") {
             visitor.visit_unit()
         } else {
-            self.bytes.err(ErrorCode::ExpectedUnit)
+            Err(Error::ExpectedUnit)
         }
     }
 
-    fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_unit_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume_struct_name(name)? {
             visitor.visit_unit()
         } else {
@@ -332,8 +318,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    // HMM
+    fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.bytes.consume_struct_name(name)?;
         self.bytes.skip_ws()?;
 
@@ -345,49 +331,46 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             if self.bytes.consume(")") {
                 Ok(value)
             } else {
-                self.bytes.err(ErrorCode::ExpectedStructEnd)
+                Err(Error::ExpectedStructEnd)
             }
         } else if name.is_empty() {
-            self.bytes.err(ErrorCode::ExpectedStruct)
+            Err(Error::ExpectedStruct)
         } else {
-            self.bytes.err(ErrorCode::ExpectedNamedStruct(name))
+            Err(Error::ExpectedNamedStruct(name))
         }
     }
 
-    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("[") {
-            let value = visitor.visit_seq(CommaSeparated::new(b']', &mut self))?;
+            let value = visitor.visit_seq(CommaSeparated::new(b']', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume("]") {
                 Ok(value)
             } else {
-                self.bytes.err(ErrorCode::ExpectedArrayEnd)
+                Err(Error::ExpectedArrayEnd)
             }
         } else {
-            self.bytes.err(ErrorCode::ExpectedArray)
+            Err(Error::ExpectedArray)
         }
     }
 
-    fn deserialize_tuple<V>(mut self, _len: usize, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_tuple<V>(mut self, _len: usize, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("(") {
-            let value = visitor.visit_seq(CommaSeparated::new(b')', &mut self))?;
+            let value = visitor.visit_seq(CommaSeparated::new(b')', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume(")") {
                 Ok(value)
             } else {
-                self.bytes.err(ErrorCode::ExpectedArrayEnd)
+                Err(Error::ExpectedArrayEnd)
             }
         } else {
-            self.bytes.err(ErrorCode::ExpectedArray)
+            Err(Error::ExpectedArray)
         }
     }
 
-    fn deserialize_tuple_struct<V>(self, name: &'static str, len: usize, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_tuple_struct<V>(self, name: &'static str, len: usize, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.bytes.consume_struct_name(name)?;
         self.deserialize_tuple(len, visitor)
     }
@@ -395,15 +378,15 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
     where V: Visitor<'de> {
         if self.bytes.consume("{") {
-            let value = visitor.visit_map(CommaSeparated::new(b'}', &mut self))?;
+            let value = visitor.visit_map(CommaSeparated::new(b'}', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume("}") {
                 return Ok(value);
             } else {
-                return self.bytes.err(ErrorCode::ExpectedMapEnd);
+                return Err(Error::ExpectedMapEnd);
             }
-        } 
+        } else {
 
         // if V::Value::Unit.is_nested() {
             // let value = visitor.visit_map(CommaSeparated::new(b';', &mut self))?;
@@ -411,28 +394,30 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             // return Ok(value);
         // }
 
-        return self.bytes.err(ErrorCode::ExpectedMap);
+            Err(Error::ExpectedMap)
+        }
     }
 
-    fn deserialize_struct<V>(mut self, name: &'static str, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_struct<V>(mut self, name: &'static str, _fields: &'static [&'static str], visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.bytes.consume_struct_name(name)?;
         self.bytes.skip_ws()?;
 
+        // self.handle_struct_after_name(name, visitor)
+
         if self.bytes.consume("{") {
             //to prevent duplicated error i need to reimplement whatever the below method is
-            let value = visitor.visit_map(CommaSeparated::new(b'}', &mut self))?;
+            let value = visitor.visit_map(CommaSeparated::new(b'}', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume("}") {
                 Ok(value)
             } else {
-                self.bytes.err(ErrorCode::ExpectedStructEnd)
+                Err(Error::ExpectedStructEnd)
             }
         } else if name.is_empty() {
-            self.bytes.err(ErrorCode::ExpectedStruct)
+            Err(Error::ExpectedStruct)
         } else {
-            self.bytes.err(ErrorCode::ExpectedNamedStruct(name))
+            Err(Error::ExpectedNamedStruct(name))
         }
     }
 
@@ -444,7 +429,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
     where V: Visitor<'de> {
         visitor.visit_str(
-            str::from_utf8(self.bytes.identifier()?).map_err(|e| self.bytes.error(e.into()))?,
+            str::from_utf8(self.bytes.identifier()?).map_err(Error::from)?,
         )
     }
 
@@ -470,10 +455,6 @@ impl<'a, 'de> CommaSeparated<'a, 'de> {
         }
     }
 
-    fn err<T>(&self, kind: ErrorCode) -> Result<T> {
-        self.de.bytes.err(kind)
-    }
-
     fn has_element(&mut self) -> Result<bool> {
         self.de.bytes.skip_ws()?;
 
@@ -488,7 +469,7 @@ impl<'a, 'de> CommaSeparated<'a, 'de> {
             // No trailing comma but terminator
             (false, false) => Ok(false),
             // No trailing comma or terminator
-            (false, true) => self.err(ErrorCode::ExpectedComma), 
+            (false, true) => Err(Error::ExpectedComma), 
         }
     }
 }
@@ -539,7 +520,7 @@ impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
             let res = seed.deserialize(&mut TagDeserializer::new(&mut *self.de))?;
             self.had_comma = self.de.bytes.comma()?;
 
-            return Ok(res);
+            Ok(res)
         } else {
 
             // if nested_map {
@@ -547,7 +528,7 @@ impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
                 // return Ok(res);  
             // }  
 
-            self.err(ErrorCode::ExpectedMapSeparator)
+            Err(Error::ExpectedMapSeparator)
         }
     }
 }
@@ -595,10 +576,10 @@ impl<'de, 'a> de::VariantAccess<'de> for Enum<'a, 'de> {
             if self.de.bytes.consume(")") {
                 Ok(val)
             } else {
-                self.de.bytes.err(ErrorCode::ExpectedStructEnd)
+                Err(Error::ExpectedStructEnd)
             }
         } else {
-            self.de.bytes.err(ErrorCode::ExpectedStruct)
+            Err(Error::ExpectedStruct)
         }
     }
 

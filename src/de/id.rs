@@ -1,6 +1,5 @@
-use serde::de::{self, Visitor};
-
-use super::{Deserializer, Error, Result};
+use super::{ Deserializer, Error, Result };
+use serde::de::{ self, Visitor };
 
 pub struct IdDeserializer<'a, 'b: 'a> {
     d: &'a mut Deserializer<'b>,

@@ -1,7 +1,9 @@
+use super::*;
+
+use crate::error::{ Error, Position, SpannedError, SpannedResult };
+use std::collections::HashMap;
 use serde::Deserialize;
 use serde_bytes;
-
-use super::*;
 
 // Cavetta Construction
 //    HashMap - <key> value,
@@ -10,12 +12,16 @@ use super::*;
 //    Vec - fieldname [value],
 //          fieldname [value],
 //          ...
-// Cavetta + Spaga Specialised Construction
+//
+// Cavetta + Spaga Construction
 //    HashMap - fieldname [<key> value]
 //              fieldname [<key> value]
-//    OR
+//              ...
+//
+// Spagetta Construction
+//    HashMap - fieldname <key> value
 //              fieldname <key> value
-//              fieldname <key> value
+//              ...
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 struct MyStruct {
@@ -140,7 +146,23 @@ fn test_nested_map() {
         }")
     );
 
+    // Spaga Construction
+    // assert_eq!(Ok(map),
+    //     from_str("{
+    //         first 4: 5,
+    //         first 6: 9,
+    //     }")
+    // );
+
     // Cavetta + Spaga Construction
+    // assert_eq!(Ok(map),
+    //     from_str("{
+    //         first [<4> 5],
+    //         first [<6> 9],
+    //     }")
+    // );
+
+    // Spagetta Construction
     // assert_eq!(Ok(map),
     //     from_str("{
     //         first <4> 5,
@@ -152,6 +174,7 @@ fn test_nested_map() {
 #[test]
 fn test_option() {
     assert_eq!(Ok(Some(1u8)), from_str("1"));
+    assert_eq!(Ok(Some(1u8)), from_str("Some(1)"));
     assert_eq!(Ok(None::<u8>), from_str("None"));
 }
 
@@ -167,8 +190,7 @@ fn test_enum() {
 fn test_array() {
     let empty: [i32; 0] = [];
     assert_eq!(Ok(empty), from_str("()"));
-    let empty_array = empty.to_vec();
-    assert_eq!(Ok(empty_array), from_str("[]"));
+    assert_eq!(Ok(empty.to_vec()), from_str("[]"));
 
     assert_eq!(Ok([2, 3, 4i32]), from_str("(2,3,4,)"));
     assert_eq!(Ok([2, 3, 4i32].to_vec()), from_str("[2,3,4,]"));
@@ -190,16 +212,12 @@ fn test_string() {
 fn test_char() {
     assert_eq!(Ok('c'), from_str("'c'"));
     assert_eq!(Ok('朦'), from_str("朦"));
-}
-
-#[test]
-fn test_escape_char() {
-    assert_eq!('\'', from_str::<char>("'\\''").unwrap());
+    assert_eq!(Ok('\''), from_str::<char>("'\\''"));
 }
 
 #[test]
 fn test_escape() {
-    assert_eq!("\"Quoted\"", from_str::<String>(r#""\"Quoted\"""#).unwrap());
+    assert_eq!("\"Marked\"", from_str::<String>(r#""\"Marked\"""#).unwrap());
 }
 
 #[test]
@@ -211,13 +229,13 @@ fn test_comment() {
             # There is another comment in the very next line..
             # And y is indeed
             y: 2.0 # 2!
-        }")
+        } # noob")
         .unwrap()
     );
 }
 
-fn err<T>(kind: ErrorCode, line: usize, col: usize) -> Result<T> {
-    Err(Error {
+fn err<T>(kind: Error, line: usize, col: usize) -> SpannedResult<T> {
+    Err(SpannedError {
         code: kind,
         position: Position { line, col },
     })
@@ -225,39 +243,42 @@ fn err<T>(kind: ErrorCode, line: usize, col: usize) -> Result<T> {
 
 #[test]
 fn test_err_wrong_value() {
-    use self::ErrorCode::*;
+    use self::Error::*;
 
-    assert_eq!(from_str::<f32>("'c'"), err(ExpectedFloat, 1, 1));
-    assert_eq!(from_str::<String>("'c'"), err(ExpectedString, 1, 1));
-    assert_eq!(from_str::<HashMap<u32, u32>>("'c'"), err(ExpectedMap, 1, 1));
-    assert_eq!(from_str::<[u8; 5]>("'c'"), err(ExpectedArray, 1, 1));
-    assert_eq!(from_str::<Vec<u32>>("'c'"), err(ExpectedArray, 1, 1));
-    assert_eq!(from_str::<MyEnum>("'c'"), err(ExpectedIdentifier, 1, 1));
-    assert_eq!(
-        from_str::<MyStruct>("'c'"),
-        err(ExpectedNamedStruct("MyStruct"), 1, 1)
-    );
+    assert_eq!(err(ExpectedFloat, 1, 1), from_str::<f32>("'c'"));
+    assert_eq!(err(ExpectedString, 1, 1), from_str::<String>("'c'"));
+    // assert_eq!(err(ExpectedChar, 1, 1), from_str::<char>(r#""c""#));
+    assert_eq!(err(ExpectedMap, 1, 1), from_str::<HashMap<u32, u32>>("'c'"));
+    // assert_eq!(err(ExpectedMapSeparator,
+    // assert_eq!(err(ExpectedMapEnd,
+    assert_eq!(err(ExpectedArray, 1, 1), from_str::<[u8; 5]>("'c'"));
+    assert_eq!(err(ExpectedArray, 1, 1), from_str::<Vec<u32>>("'c'"));
+    // ExpectedArrayEnd,
+
+    assert_eq!(err(ExpectedIdentifier, 1, 1), from_str::<MyEnum>("'c'"));
+    assert_eq!(err(ExpectedNamedStruct("MyStruct"), 1, 1), from_str::<MyStruct>("'c'"));
+    assert_eq!(err(ExpectedArray, 1, 1), from_str::<(u8, bool)>("'c'"));
+    assert_eq!(err(ExpectedBoolean, 1, 1), from_str::<bool>("notabool"));
+    assert_eq!(err(ExpectedFloat, 2, 8), from_str::<MyStruct>("MyStruct{\n x:    true}"));
+    assert_eq!(err(ExpectedFloat, 3, 6), from_str::<MyStruct>("MyStruct{\n x: 3.5, \n   y:}"));
+
+    // ExpectedOptionEnd,
+    // ExpectedAttribute,
+    // ExpectedAttributeEnd,
+    // Eof,
+    // assert_eq!(err(ExpectedTupleStruct,
+    // assert_eq!(err(ExpectedStructEnd,
+    // assert_eq!(err(ExpectedUnit,
+    // assert_eq!(err(ExpectedComma,
+
     assert_eq!(
         from_str::<MyStruct>("NotMyStruct(x: 4, y: 2)"),
         err(
-            ExpectedStructName {
+            ExpectedDifferentStructName {
                 expected: "MyStruct",
                 found: String::from("NotMyStruct")
-            },
-            1,
-            1
+            }, 1, 12
         )
-    );
-    assert_eq!(from_str::<(u8, bool)>("'c'"), err(ExpectedArray, 1, 1));
-    assert_eq!(from_str::<bool>("notabool"), err(ExpectedBoolean, 1, 1));
-
-    assert_eq!(
-        from_str::<MyStruct>("MyStruct{\n    x: true}"),
-        err(ExpectedFloat, 2, 8)
-    );
-    assert_eq!(
-        from_str::<MyStruct>("MyStruct{\n    x: 3.5, \n    y:}"),
-        err(ExpectedFloat, 3, 7)
     );
 }
 
@@ -300,11 +321,11 @@ fn rename() {
 
 #[test]
 fn forgot_apostrophes() {
-    let de: Result<(i32, String)> = from_str("(4, \"Hello)");
+    let de: SpannedResult<(i32, String)> = from_str("(4, \"Hello)");
 
     assert!(match de {
-        Err(Error {
-            code: ErrorCode::ExpectedStringEnd,
+        Err(SpannedError {
+            code: Error::ExpectedStringEnd,
             position: _,
         }) => true,
         _ => false,
@@ -357,3 +378,24 @@ fn test_any_number_precision() {
     assert_eq!(de_any_number("-1."), AnyNum::F32(-1.));
     assert_eq!(de_any_number("0.3"), AnyNum::F64(0.3));
 }
+
+// #[test]
+// fn test_complex() {
+//     assert_eq!(
+//         ??
+//         from_str(
+//             "
+// Some([
+//     Room( width: 20, height: 5, name: \"The Room\" ),
+//     (
+//         width: 10.0,
+//         height: 10.0,
+//         name: \"Another room\",
+//         enemy_levels: {
+//             \"Enemy1\": 3,
+//             \"Enemy2\": 5,
+//             \"Enemy3\": 7,
+//         },
+//     ),
+// ])"))
+//     
