@@ -4,39 +4,10 @@ use serde_bytes;
 
 use super::*;
 
-#[derive(Debug, PartialEq, Deserialize)]
-struct EmptyStruct1;
-
-#[derive(Debug, PartialEq, Deserialize)]
-struct EmptyStruct2 {}
-
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 struct MyStruct {
     x: f32,
     y: f32,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-struct MyStruct2 {
-    x: HashMap<u16, u16>,
-    y: u16,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-struct MyStruct3 {
-    x: HashMap<u16, u16>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-struct MyStruct4 {
-    x: Option<String>,
-    y: String,
-    z: f32
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-struct MyStruct5 {
-    x: Vec<u32>
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -47,13 +18,6 @@ enum MyEnum {
     D { a: i32, b: i32 },
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct BytesStruct {
-    small: Vec<u8>,
-    #[serde(with = "serde_bytes")]
-    large: Vec<u8>,
-}
-
 // #[test] 
 // fn test_include() {
 //     use std::path::PathBuf;
@@ -62,7 +26,12 @@ struct BytesStruct {
 
 #[test]
 fn test_empty_struct() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct EmptyStruct1;
     assert_eq!(Ok(EmptyStruct1), from_str("EmptyStruct1"));
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct EmptyStruct2 {}
     assert_eq!(Ok(EmptyStruct2 {}), from_str("EmptyStruct2{}"));
 }
 
@@ -91,6 +60,51 @@ fn test_tuple_struct() {
 }
 
 #[test]
+fn test_mapped_struct() {
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    struct MappedStruct { x: HashMap<u16, u16>, y: u16 }
+    let mapped_struct = MappedStruct { 
+        x: HashMap::from([(4,7),(5,9)]), 
+        y: 7 
+    };
+    
+    assert_eq!(Ok(mapped_struct), 
+        from_str("MappedStruct {
+            x: {4:7,5:9},
+            y: 7
+        }"
+    ));
+
+    // Nested Cavetta Construct
+    // assert_eq!(Ok(mapped_struct),
+    //     from_str("MappedStruct { 
+    //         x <4> 7;
+    //         x <5> 9;
+    //         y: 7
+    //     }")
+    // );
+}
+
+#[test]
+fn test_vecd_struct() {
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    struct VecdStruct { x: Vec<u32> }
+    let vecd_struct = VecdStruct { x: vec![4, 5] };
+    assert_eq!(Ok(vecd_struct),
+        from_str("VecdStruct { 
+            x: [4, 5],
+        }")
+    );
+
+    // assert_eq!(Ok(my_struct5.clone()),
+    //     from_str("MyStruct5 { 
+    //         x: [4],
+    //         x: [5]
+    //     }")
+    // );
+}
+
+#[test]
 fn test_struct() {
     let my_struct = MyStruct { x: 4.0, y: 7.0 };    
     assert_eq!(Ok(my_struct), from_str("MyStruct {x:4,y:7,}"));
@@ -101,83 +115,6 @@ fn test_struct() {
             <y> 7
         }")
     );
-
-    //Map inside Struct
-    let my_struct2 = MyStruct2 { 
-        x: HashMap::from([(4,7),(5,9)]), 
-        y: 7 
-    };
-    
-    assert_eq!(Ok(my_struct2), 
-        from_str("MyStruct2{
-            x: {4:7,5:9},
-            y: 7
-        }"
-    ));
-
-    // Nested Cavetta Construct
-    // assert_eq!(Ok(my_struct3),
-    //     from_str("MyStruct3{ 
-    //         x <4> 7;
-    //         x <5> 9;
-    //     }")
-    // );
-
-    let my_struct5 = MyStruct5 { x: vec![4, 5] };
-    assert_eq!(Ok(my_struct5),
-        from_str("MyStruct5 { 
-            x: [4, 5],
-        }")
-    );
-    // assert_eq!(Ok(my_struct5.clone()),
-    //     from_str("MyStruct5 { 
-    //         x: [4],
-    //         x: [5]
-    //     }")
-    // );
-
-
-    // ?? I think testing undelimited stuff -- maybe remove
-    let my_struct4 = MyStruct4 { 
-        x: Some(String::from("zme")), 
-        y: String::from("rald"), 
-        z: 1.0 
-    };
-    assert_eq!(Ok(my_struct4), 
-        from_str("MyStruct4 {
-            x: zme,
-            y: rald,
-            z: 1.0
-        }"
-    ));
-}
-
-#[test]
-fn test_option() {
-    assert_eq!(Ok(Some(1u8)), from_str("1"));
-    assert_eq!(Ok(None::<u8>), from_str("None"));
-}
-
-#[test]
-fn test_enum() {
-    assert_eq!(Ok(MyEnum::A), from_str("A"));
-    assert_eq!(Ok(MyEnum::B(true)), from_str("B(true,)"));
-    assert_eq!(Ok(MyEnum::C(true, 3.5)), from_str("C(true,3.5)"));
-    assert_eq!(Ok(MyEnum::D{ a: 2, b: 3 }), from_str("D{a:2,b:3,}"));
-}
-
-#[test]
-fn test_array() {
-    let empty: [i32; 0] = [];
-    assert_eq!(Ok(empty), from_str("()"));
-    let empty_array = empty.to_vec();
-    assert_eq!(Ok(empty_array), from_str("[]"));
-
-    assert_eq!(Ok([2, 3, 4i32]), from_str("(2,3,4,)"));
-    assert_eq!(Ok([2, 3, 4i32].to_vec()), from_str("[2,3,4,]"));
-
-    assert_eq!(Ok([String::from("zme"), String::from("rald")].to_vec()), from_str("[\"zme\",rald]"));
-    assert_eq!(Ok([String::from("a"), String::from("b"), String::from("he lo")].to_vec()), from_str("[a,   b,      \"he lo\"]"));
 }
 
 #[test]
@@ -195,8 +132,7 @@ fn test_map() {
         }").as_ref()
     );
 
-
-    // using cavetta construct
+    // Cavetta Construct
     assert_eq!(Ok(map),
         from_str("{ 
             <(true,false)> 4,
@@ -229,24 +165,40 @@ fn test_map() {
 }
 
 #[test]
+fn test_option() {
+    assert_eq!(Ok(Some(1u8)), from_str("1"));
+    assert_eq!(Ok(None::<u8>), from_str("None"));
+}
+
+#[test]
+fn test_enum() {
+    assert_eq!(Ok(MyEnum::A), from_str("A"));
+    assert_eq!(Ok(MyEnum::B(true)), from_str("B(true,)"));
+    assert_eq!(Ok(MyEnum::C(true, 3.5)), from_str("C(true,3.5)"));
+    assert_eq!(Ok(MyEnum::D{ a: 2, b: 3 }), from_str("D{a:2,b:3,}"));
+}
+
+#[test]
+fn test_array() {
+    let empty: [i32; 0] = [];
+    assert_eq!(Ok(empty), from_str("()"));
+    let empty_array = empty.to_vec();
+    assert_eq!(Ok(empty_array), from_str("[]"));
+
+    assert_eq!(Ok([2, 3, 4i32]), from_str("(2,3,4,)"));
+    assert_eq!(Ok([2, 3, 4i32].to_vec()), from_str("[2,3,4,]"));
+
+    assert_eq!(Ok([String::from("zme"), String::from("rald")].to_vec()), from_str("[\"zme\",rald]"));
+    assert_eq!(Ok([String::from("a"), String::from("b"), String::from("he lo")].to_vec()), from_str("[a,   b,      \"he lo\"]"));
+}
+
+#[test]
 fn test_string() {
     let s: String = from_str("\"わ\"").unwrap();
     assert_eq!("わ", s);
     
     let s: String = from_str("わ").unwrap();
     assert_eq!("わ", s);
-
-    // let raw: String = from_str("r\"String\"").unwrap();
-    // assert_eq!("String", raw);
-
-    // let raw_hashes: String = from_str("r#\"String\"#").unwrap();
-    // assert_eq!("String", raw_hashes);
-
-    // let raw_hashes_multiline: String = from_str("r#\"String with\nmultiple\nlines\n\"#").unwrap();
-    // assert_eq!("String with\nmultiple\nlines\n", raw_hashes_multiline);
-
-    // let raw_hashes_quote: String = from_str("r##\"String with \"#\"##").unwrap();
-    // assert_eq!("String with \"#", raw_hashes_quote);
 }
 
 #[test]
@@ -385,6 +337,13 @@ fn ws_tuple_newtype_variant() {
 
 #[test]
 fn test_byte_stream() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct BytesStruct {
+        small: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        large: Vec<u8>,
+    }
+
     assert_eq!(
         Ok(BytesStruct {
             small: vec![1, 2],
@@ -402,14 +361,13 @@ fn test_numbers() {
     );
 }
 
-fn de_any_number(s: &str) -> AnyNum {
-    let mut bytes = Bytes::new(s.as_bytes()).unwrap();
-
-    bytes.any_num().unwrap()
-}
-
 #[test]
 fn test_any_number_precision() {
+    fn de_any_number(s: &str) -> AnyNum {
+        let mut bytes = Bytes::new(s.as_bytes()).unwrap();
+        bytes.any_num().unwrap()
+    }
+
     assert_eq!(de_any_number("1"), AnyNum::U8(1));
     assert_eq!(de_any_number("+1"), AnyNum::I8(1));
     assert_eq!(de_any_number("-1"), AnyNum::I8(-1));
@@ -418,35 +376,3 @@ fn test_any_number_precision() {
     assert_eq!(de_any_number("-1."), AnyNum::F32(-1.));
     assert_eq!(de_any_number("0.3"), AnyNum::F64(0.3));
 }
-
-
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
-pub struct Layout {
-    // pub id: String,
-    
-    // pub modifiers: Vec<Modifier>,                   //will use `Name` tag to associate levels with modifiers on deserialise 
-    // pub levels: HashMap<u16, HashSet<ModifierIndex>>,           //<Level, Modifiers> # pointing to layout.modifiers
-
-    // pub specs: Option<HashMap<u16, Vec<Option<String>>>>,   //<KeyCode, SpecialName>
-    // pub keys: HashMap<u16, Vec<Option<String>>>,            //<KeyCode, Character.s>
-    // pub bindings: HashMap<u16, Vec<Option<Function>>>       //<KeyCode, Functions>
-}
-
-// pub type ModifierIndex = usize;
-
-// #[derive(Debug, Clone, Deserialize)]
-// pub struct Modifier {
-//     pub kind: ModifierKind,
-//     pub key_codes: HashSet<u16>
-// }
-
-// #[derive(Debug, PartialEq, Deserialize)]
-// pub enum Function {
-//     ChangeMethodTo(String)
-// }
-
-
-// #[test]
-// fn test_kb() {
-//     assert_eq!(Ok(Layout {}), from_str("Layout()"));
-// }
