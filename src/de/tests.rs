@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use serde::Deserialize;
 use serde_bytes;
 
@@ -121,14 +120,15 @@ fn test_struct() {
 fn test_map() {
     use std::collections::HashMap;
 
-    let mut map = HashMap::new();
-    map.insert((true, false), 4);
-    map.insert((false, false), 123);
+    let map = HashMap::from([
+        ((true, false), 4), 
+        ((false, false), 123)
+    ]);
 
     assert_eq!(Ok(&map),
         from_str("{
             (true,false,):4,
-            (false,false,):123,
+            (false,false,):123
         }").as_ref()
     );
 
@@ -139,29 +139,17 @@ fn test_map() {
             <(false, false)> 123
         }")
     );
+}
 
-    // Nested map with cavetta construct (mostly maps within structs)
-    // Schema: Key1 value1[<Key2> <Value2>]
-    // let mut map_holder = HashMap::new();
-    // let mut map2 = HashMap::new();
-    // map2.insert(4, 5);
-    // map_holder.insert("first", map2);
-    // assert_eq!(Ok(map_holder),
-    //     from_str("{
-    //         first <4> 5;
-    //     }")
-    // );
-
-    // let my_struct = MyStruct { x: 4.0, y: 7.0 };
-    // let mut map_holder = HashMap::new();
-    // let mut map2 = HashMap::new();
-    // map2.insert(4, my_struct);
-    // map_holder.insert("first", map2);
-    // assert_eq!(Ok(map_holder),
-    //     from_str("{
-    //         \"first\" <4> { x:4, y:7 };
-    //     }")
-    // );
+#[test]
+fn test_nested_map() {
+    // Nested map with cavetta construct (mostly maps within structs (i.e. maps))
+    let mut map_holder = HashMap::from([("first", HashMap::from([(4, 5)]))]);
+    assert_eq!(Ok(map_holder),
+        from_str("{
+            first <4> 5;
+        }")
+    );
 }
 
 #[test]
