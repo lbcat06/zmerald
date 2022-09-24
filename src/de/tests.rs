@@ -3,6 +3,15 @@ use serde_bytes;
 
 use super::*;
 
+// Cavetta Construct
+//    HashMap - <key> value,
+//    Nested HashMap - fieldname <key> value
+//
+// Spaga Construct
+//    Vec - fieldname [value],
+//          fieldname [value],
+//          ...
+
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 struct MyStruct {
     x: f32,
@@ -19,6 +28,7 @@ enum MyEnum {
 
 // #[test] 
 // fn test_include() {
+//     replace instance of `include <{path}>` with the content of the file
 //     use std::path::PathBuf;
 //     assert_eq!(Ok(PathBuf::from("poop")), from_str("include <>"));
 // }
@@ -38,15 +48,14 @@ fn test_empty_struct() {
 fn test_new_type_struct() {
     #[derive(Debug, PartialEq, Deserialize)]
     struct NewType(i32);
-    assert_eq!(Ok(NewType(42)), from_str("NewType(42)"));
-    assert_eq!(Ok(NewType(33)), from_str("(33)"));
+    assert_eq!(Ok(NewType(99)), from_str("NewType(99)"));
+    assert_eq!(Ok(NewType(20)), from_str("(20)"));
 }
 
 #[test]
 fn test_unit_struct() {
     #[derive(Debug, PartialEq, Deserialize)]
     struct UnitStruct;
-    // assert_eq!(Ok(UnitStruct), from_str("UnitStruct{}"));
     assert_eq!(Ok(UnitStruct), from_str("{}"));
 }
 
@@ -54,12 +63,20 @@ fn test_unit_struct() {
 fn test_tuple_struct() {
     #[derive(Debug, PartialEq, Deserialize)]
     struct TupleStruct(f32, f32);
-    assert_eq!(Ok(TupleStruct(2.0, 5.0)), from_str("TupleStruct(2,5,)"));
-    assert_eq!(Ok(TupleStruct(3.0, 4.0)), from_str("(3,4)"));
+    assert_eq!(Ok(TupleStruct(1.0, 9.0)), from_str("TupleStruct(1,9,)"));
+    assert_eq!(Ok(TupleStruct(6.0, 4.0)), from_str("(6,4)"));
 }
 
 #[test]
-fn test_mapped_struct() {
+fn test_struct() {
+    let my_struct = MyStruct { x: 4.0, y: 7.0 };    
+    assert_eq!(Ok(my_struct), from_str("MyStruct {x:4,y:7,}"));
+    assert_eq!(Ok(my_struct), from_str("{ x:4, y:7 }"));
+    assert_eq!(Ok(my_struct), from_str("MyStruct { <x> 4, <y> 7 }"));
+}
+
+#[test]
+fn test_cavetta_n_X_construct() {
     #[derive(Clone, Debug, PartialEq, Deserialize)]
     struct MappedStruct { x: HashMap<u16, u16>, y: u16 }
     let mapped_struct = MappedStruct { 
@@ -67,14 +84,14 @@ fn test_mapped_struct() {
         y: 7 
     };
     
-    assert_eq!(Ok(mapped_struct), 
+    assert_eq!(Ok(mapped_struct.clone()), 
         from_str("MappedStruct {
             x: {4:7,5:9},
             y: 7
         }"
     ));
 
-    // Nested Cavetta Construct
+    // Cavetta Construction (Nested) + X Construction
     // assert_eq!(Ok(mapped_struct),
     //     from_str("MappedStruct { 
     //         x <4> 7;
@@ -95,6 +112,7 @@ fn test_vecd_struct() {
         }")
     );
 
+    // Spaga Construction
     // assert_eq!(Ok(my_struct5.clone()),
     //     from_str("MyStruct5 { 
     //         x: [4],
@@ -104,22 +122,7 @@ fn test_vecd_struct() {
 }
 
 #[test]
-fn test_struct() {
-    let my_struct = MyStruct { x: 4.0, y: 7.0 };    
-    assert_eq!(Ok(my_struct), from_str("MyStruct {x:4,y:7,}"));
-    assert_eq!(Ok(my_struct), from_str("{x:4,y:7}"));
-    assert_eq!(Ok(my_struct),
-        from_str("MyStruct { 
-            <x> 4,
-            <y> 7
-        }")
-    );
-}
-
-#[test]
 fn test_map() {
-    use std::collections::HashMap;
-
     let map = HashMap::from([
         ((true, false), 4), 
         ((false, false), 123)
@@ -132,7 +135,7 @@ fn test_map() {
         }").as_ref()
     );
 
-    // Cavetta Construct
+    // Cavetta Construction
     assert_eq!(Ok(map),
         from_str("{ 
             <(true,false)> 4,
@@ -143,13 +146,28 @@ fn test_map() {
 
 #[test]
 fn test_nested_map() {
-    // Nested map with cavetta construct (mostly maps within structs (i.e. maps))
-    let mut map_holder = HashMap::from([("first", HashMap::from([(4, 5)]))]);
-    assert_eq!(Ok(map_holder),
+    let map = HashMap::from([("first", HashMap::from([(4, 5), (6, 9)]))]);
+
+    assert_eq!(Ok(map.clone()), 
         from_str("{
-            first <4> 5;
+            first: {4:5,6:9},
+        }"
+    ));
+
+    // Cavetta Construction
+    assert_eq!(Ok(map.clone()),
+        from_str("{
+            first: { <4> 5, <6> 9 }
         }")
     );
+
+    // Cavetta Construction (Nested)
+    // assert_eq!(Ok(map),
+    //     from_str("{
+    //         first <4> 5,
+    //         first <6> 9,
+    //     }")
+    // );
 }
 
 #[test]
@@ -176,8 +194,8 @@ fn test_array() {
     assert_eq!(Ok([2, 3, 4i32]), from_str("(2,3,4,)"));
     assert_eq!(Ok([2, 3, 4i32].to_vec()), from_str("[2,3,4,]"));
 
+    assert_eq!(Ok([String::from("zme"), String::from("rald")]), from_str("(\"zme\",rald)"));
     assert_eq!(Ok([String::from("zme"), String::from("rald")].to_vec()), from_str("[\"zme\",rald]"));
-    assert_eq!(Ok([String::from("a"), String::from("b"), String::from("he lo")].to_vec()), from_str("[a,   b,      \"he lo\"]"));
 }
 
 #[test]
@@ -192,8 +210,7 @@ fn test_string() {
 #[test]
 fn test_char() {
     assert_eq!(Ok('c'), from_str("'c'"));
-    assert_eq!(Ok('c'), from_str("c"));
-    assert_eq!(Ok('存'), from_str("存"));
+    assert_eq!(Ok('朦'), from_str("朦"));
 }
 
 #[test]
@@ -232,7 +249,6 @@ fn err<T>(kind: ErrorCode, line: usize, col: usize) -> Result<T> {
 #[test]
 fn test_err_wrong_value() {
     use self::ErrorCode::*;
-    use std::collections::HashMap;
 
     assert_eq!(from_str::<f32>("'c'"), err(ExpectedFloat, 1, 1));
     assert_eq!(from_str::<String>("'c'"), err(ExpectedString, 1, 1));
