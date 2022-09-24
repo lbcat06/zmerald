@@ -387,19 +387,14 @@ impl<'a, W: io::Write> ser::Serializer for &'a mut Serializer<W> {
 
     fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<()>
     where T: ?Sized + Serialize {
-        // if self.extensions().contains(Extensions::UNWRAP_NEWTYPES) || self.newtype_variant {
-            // self.newtype_variant = false;
-            return value.serialize(&mut *self);
-        // }
+        if self.struct_names() {
+            self.write_identifier(name)?;
+        }
 
-        // if self.struct_names() {
-        //     self.write_identifier(name)?;
-        // }
-
-        // self.output.write_all(b"(")?;
-        // value.serialize(&mut *self)?;
-        // self.output.write_all(b")")?;
-        // Ok(())
+        self.output.write_all(b"(")?;
+        value.serialize(&mut *self)?;
+        self.output.write_all(b")")?;
+        Ok(())
     }
 
     fn serialize_newtype_variant<T>(self, _: &'static str, _: u32, variant: &'static str, value: &T) -> Result<()>

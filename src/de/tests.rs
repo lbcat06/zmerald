@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::error::{ Error, Position, SpannedError, SpannedResult };
+use crate::error::{ Error, SpannedError, SpannedResult };
 use std::collections::HashMap;
 use serde::Deserialize;
 use serde_bytes;

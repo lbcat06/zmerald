@@ -9,7 +9,7 @@ pub use id::IdDeserializer;
 mod tag;
 pub use tag::TagDeserializer;
 
-use crate::error::{ Error, Position, SpannedError, Result, SpannedResult };
+use crate::error::{ Error, SpannedError, Result, SpannedResult };
 use crate::parse::{ AnyNum, Bytes, ParsedStr };
 use serde::de::{ self, DeserializeSeed, Deserializer as SerdeError, Visitor };
 use std::{ borrow::Cow, io, str };
@@ -340,7 +340,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("[") {
             let value = visitor.visit_seq(CommaSeparated::new(b']', self))?;
             self.bytes.comma()?;
@@ -355,7 +355,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_tuple<V>(mut self, _len: usize, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("(") {
             let value = visitor.visit_seq(CommaSeparated::new(b')', self))?;
             self.bytes.comma()?;
@@ -375,16 +375,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
     where V: Visitor<'de> {
         if self.bytes.consume("{") {
             let value = visitor.visit_map(CommaSeparated::new(b'}', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume("}") {
-                return Ok(value);
+                Ok(value)
             } else {
-                return Err(Error::ExpectedMapEnd);
+                Err(Error::ExpectedMapEnd)
             }
         } else {
 
@@ -398,7 +398,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_struct<V>(mut self, name: &'static str, _fields: &'static [&'static str], visitor: V) -> Result<V::Value> where V: Visitor<'de> {
+    fn deserialize_struct<V>(self, name: &'static str, _fields: &'static [&'static str], visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         self.bytes.consume_struct_name(name)?;
         self.bytes.skip_ws()?;
 

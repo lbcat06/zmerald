@@ -248,7 +248,6 @@ impl<'a> Bytes<'a> {
             let max_u8 = LargeUInt::from(std::u8::MAX);
             let max_u16 = LargeUInt::from(std::u16::MAX);
             let max_u32 = LargeUInt::from(std::u32::MAX);
-            let max_u64 = LargeUInt::from(std::u64::MAX);
 
             let min_i8 = LargeSInt::from(std::i8::MIN);
             let max_i8 = LargeSInt::from(std::i8::MAX);
@@ -256,8 +255,6 @@ impl<'a> Bytes<'a> {
             let max_i16 = LargeSInt::from(std::i16::MAX);
             let min_i32 = LargeSInt::from(std::i32::MIN);
             let max_i32 = LargeSInt::from(std::i32::MAX);
-            let min_i64 = LargeSInt::from(std::i64::MIN);
-            let max_i64 = LargeSInt::from(std::i64::MAX);
 
             if is_signed {
                 match self.signed_integer::<LargeSInt>() {
@@ -316,12 +313,12 @@ impl<'a> Bytes<'a> {
     // fix this for failed char test in error
     pub fn char(&mut self) -> Result<char> {
         if self.consume("'") {
-            return self.escaped_char()
+            self.escaped_char()
         } else {
             let i = self.bytes.iter().take_while(|&&b | !is_reserved_char(b) && !is_whitespace_char(b)).count();
             let s = from_utf8(&self.bytes[..i]).map_err(Error::from)?;
             self.consume(s);
-            return Ok(s.chars().next().unwrap());
+            Ok(s.chars().next().unwrap())
         }  
     }
 
@@ -615,7 +612,7 @@ impl<'a> Bytes<'a> {
             self.skip_ws()?;
             self.consume("<");
 
-            let i = self.bytes.iter().take_while(|&&b | b!='>' as u8).count();
+            let i = self.bytes.iter().take_while(|&&b | b!=b'>').count();
             let s = from_utf8(&self.bytes[..i]).map_err(Error::from)?;
             if !s.is_empty() {
                 self.consume(s);
@@ -672,11 +669,11 @@ impl<'a> Bytes<'a> {
     }
 
     pub fn peek(&self) -> Option<u8> {
-        self.bytes.get(0).copied()
+        self.bytes.first().copied()
     }
 
     pub fn peek_or_eof(&self) -> Result<u8> {
-        self.bytes.get(0).copied().ok_or(Error::Eof)
+        self.bytes.first().copied().ok_or(Error::Eof)
     }
 
     pub fn signed_integer<T>(&mut self) -> Result<T> where T: Num {
@@ -851,7 +848,7 @@ impl<'a> Bytes<'a> {
                 }
 
                 self.expect_byte(b'}', Error::InvalidEscape("No } at the end"))?;
-                char_from_u32(bytes).ok_or_else(|| Error::InvalidEscape("Not a valid char"))?
+                char_from_u32(bytes).ok_or(Error::InvalidEscape("Not a valid char"))?
             }
             _ => {
                 return Err(Error::InvalidEscape("Unknown escape character"));

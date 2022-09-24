@@ -1,7 +1,7 @@
 use crate::{ error::Error, error::Result };
 
 use serde::{
-    de::{ DeserializeOwned, DeserializeSeed, Deserializer, Error as SerdeError, MapAccess, SeqAccess, Visitor },
+    de::{ DeserializeOwned, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor },
     forward_to_deserialize_any, Deserialize, Serialize,
 };
 
