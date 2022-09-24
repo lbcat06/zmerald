@@ -3,14 +3,19 @@ use serde_bytes;
 
 use super::*;
 
-// Cavetta Construct
+// Cavetta Construction
 //    HashMap - <key> value,
-//    Nested HashMap - fieldname <key> value
 //
-// Spaga Construct
+// Spaga Construction
 //    Vec - fieldname [value],
 //          fieldname [value],
 //          ...
+// Cavetta + Spaga Specialised Construction
+//    HashMap - fieldname [<key> value]
+//              fieldname [<key> value]
+//    OR
+//              fieldname <key> value
+//              fieldname <key> value
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 struct MyStruct {
@@ -76,32 +81,6 @@ fn test_struct() {
 }
 
 #[test]
-fn test_cavetta_n_X_construct() {
-    #[derive(Clone, Debug, PartialEq, Deserialize)]
-    struct MappedStruct { x: HashMap<u16, u16>, y: u16 }
-    let mapped_struct = MappedStruct { 
-        x: HashMap::from([(4,7),(5,9)]), 
-        y: 7 
-    };
-    
-    assert_eq!(Ok(mapped_struct.clone()), 
-        from_str("MappedStruct {
-            x: {4:7,5:9},
-            y: 7
-        }"
-    ));
-
-    // Cavetta Construction (Nested) + X Construction
-    // assert_eq!(Ok(mapped_struct),
-    //     from_str("MappedStruct { 
-    //         x <4> 7;
-    //         x <5> 9;
-    //         y: 7
-    //     }")
-    // );
-}
-
-#[test]
 fn test_vecd_struct() {
     #[derive(Clone, Debug, PartialEq, Deserialize)]
     struct VecdStruct { x: Vec<u32> }
@@ -113,8 +92,8 @@ fn test_vecd_struct() {
     );
 
     // Spaga Construction
-    // assert_eq!(Ok(my_struct5.clone()),
-    //     from_str("MyStruct5 { 
+    // assert_eq!(Ok(vecd_struct.clone()),
+    //     from_str("VecdStruct { 
     //         x: [4],
     //         x: [5]
     //     }")
@@ -161,7 +140,7 @@ fn test_nested_map() {
         }")
     );
 
-    // Cavetta Construction (Nested)
+    // Cavetta + Spaga Construction
     // assert_eq!(Ok(map),
     //     from_str("{
     //         first <4> 5,
@@ -227,14 +206,12 @@ fn test_escape() {
 fn test_comment() {
     assert_eq!(
         MyStruct { x: 1.0, y: 2.0 },
-        from_str(
-            "{
-x: 1.0, # x is just 1
-# There is another comment in the very next line..
-# And y is indeed
-y: 2.0 # 2!
-}"
-        )
+        from_str("{
+            x: 1.0, # x is just 1
+            # There is another comment in the very next line..
+            # And y is indeed
+            y: 2.0 # 2!
+        }")
         .unwrap()
     );
 }
