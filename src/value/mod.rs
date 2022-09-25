@@ -1,16 +1,16 @@
 mod map;
-pub use map::Map;
+pub use map::{ Map, MapAccessor };
 
 mod arithmetic;
 pub use arithmetic::Number;
 
+mod sequence;
+pub use sequence::Seq;
+
+use serde::de::{ DeserializeOwned, Deserializer, Visitor };
+use serde::forward_to_deserialize_any;
+
 use crate::error::{ Error, Result };
-
-use serde::{
-    de::{ DeserializeOwned, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor },
-    forward_to_deserialize_any,
-};
-
 use std::cmp::Eq;
 use std::hash::Hash;
 
@@ -109,47 +109,5 @@ impl<'de> Deserializer<'de> for Value {
         }
     }
 }
-
-struct MapAccessor {
-    keys: Vec<Value>,
-    values: Vec<Value>,
-}
-
-impl<'de> MapAccess<'de> for MapAccessor {
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-    where K: DeserializeSeed<'de> {
-        // The `Vec` is reversed, so we can pop to get the originally first element
-        self.keys
-            .pop()
-            .map_or(Ok(None), |v| seed.deserialize(v).map(Some))
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-    where V: DeserializeSeed<'de> {
-        // The `Vec` is reversed, so we can pop to get the originally first element
-        self.values
-            .pop()
-            .map(|v| seed.deserialize(v))
-            .expect("Contract violation")
-    }
-}
-
-struct Seq {
-    seq: Vec<Value>,
-}
-
-impl<'de> SeqAccess<'de> for Seq {
-    type Error = Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-    where T: DeserializeSeed<'de> {
-        // The `Vec` is reversed, so we can pop to get the originally first element
-        self.seq
-            .pop()
-            .map_or(Ok(None), |v| seed.deserialize(v).map(Some))
-    }
-} 
 
 //COLOUUUUUUUUUUUURS YOUPI 

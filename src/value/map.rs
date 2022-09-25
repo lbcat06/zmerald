@@ -1,9 +1,11 @@
 use super::Value;
 
+use crate::error::{ Error, Result };
 use std::cmp::Ordering;
 use std::hash::{ Hasher, Hash };
 use std::ops::{ Index, IndexMut };
 use serde::{ Deserialize, Serialize };
+use serde::de::{ DeserializeSeed, MapAccess };
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(transparent)]
@@ -99,3 +101,29 @@ impl PartialOrd for Map {
 
 type MapInner = std::collections::BTreeMap<Value, Value>;
 // type MapInner = indexmap::IndexMap<Value, Value>;
+
+pub struct MapAccessor {
+    pub keys: Vec<Value>,
+    pub values: Vec<Value>,
+}
+
+impl<'de> MapAccess<'de> for MapAccessor {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where K: DeserializeSeed<'de> {
+        // The `Vec` is reversed, so we can pop to get the originally first element
+        self.keys
+            .pop()
+            .map_or(Ok(None), |v| seed.deserialize(v).map(Some))
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where V: DeserializeSeed<'de> {
+        // The `Vec` is reversed, so we can pop to get the originally first element
+        self.values
+            .pop()
+            .map(|v| seed.deserialize(v))
+            .expect("Contract violation")
+    }
+}
