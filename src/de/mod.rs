@@ -1,4 +1,5 @@
 mod value;
+mod map;
 
 #[cfg(test)]
 mod tests;
@@ -401,7 +402,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     }
 }
 
-
 struct CommaSeparated<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
     terminator: u8,
@@ -420,11 +420,6 @@ impl<'a, 'de> CommaSeparated<'a, 'de> {
     fn has_element(&mut self) -> Result<bool> {
         self.de.bytes.skip_ws()?;
 
-        //nested cavetta constructions can only have 1 element
-        // if self.terminator==b';' {
-        //     return Ok(true);
-        // }
-
         match (self.had_comma, self.de.bytes.peek_or_eof()? != self.terminator) {
             // Trailing comma, maybe has a next element
             (true, has_element) => Ok(has_element),
@@ -439,8 +434,7 @@ impl<'a, 'de> CommaSeparated<'a, 'de> {
 impl<'de, 'a> de::SeqAccess<'de> for CommaSeparated<'a, 'de> {
     type Error = Error;
 
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-    where T: DeserializeSeed<'de> {
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>> where T: DeserializeSeed<'de> {
         if self.has_element()? {
             let res = seed.deserialize(&mut *self.de)?;
             self.had_comma = self.de.bytes.comma()?;
@@ -455,11 +449,8 @@ impl<'de, 'a> de::SeqAccess<'de> for CommaSeparated<'a, 'de> {
 impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
     type Error = Error;
 
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
-    where K: DeserializeSeed<'de> {
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>> where K: DeserializeSeed<'de> {
         if self.has_element()? {
-
-            // < = cavetta construction
             if self.de.bytes.consume("<") {
                 return seed.deserialize(&mut *self.de).map(Some);
             } else if self.terminator == b')' {
@@ -472,11 +463,9 @@ impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
         }
     }
 
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
-    where V: DeserializeSeed<'de> {
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value> where V: DeserializeSeed<'de> {
         self.de.bytes.skip_ws()?;
 
-        // > = cavetta construction
         if self.de.bytes.consume(":") || self.de.bytes.consume(">") {
             self.de.bytes.skip_ws()?;
             let res = seed.deserialize(&mut TagDeserializer::new(&mut *self.de))?;
@@ -484,12 +473,6 @@ impl<'de, 'a> de::MapAccess<'de> for CommaSeparated<'a, 'de> {
 
             Ok(res)
         } else {
-
-            // if nested_map {
-                // let res = seed.deserialize(&mut TagDeserializer::new(&mut *self.de))?;
-                // return Ok(res);  
-            // }  
-
             Err(Error::ExpectedMapSeparator)
         }
     }

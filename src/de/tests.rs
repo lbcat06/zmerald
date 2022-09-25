@@ -88,20 +88,31 @@ fn test_struct() {
 
 #[test]
 fn test_vecd_struct() {
-    #[derive(Clone, Debug, PartialEq, Deserialize)]
-    struct VecdStruct { x: Vec<u32> }
-    let vecd_struct = VecdStruct { x: vec![4, 5] };
-    assert_eq!(Ok(vecd_struct.clone()),
-        from_str("VecdStruct { 
-            x: [4, 5],
-        }")
-    );
+    // #[derive(Clone, Debug, PartialEq, Deserialize)]
+    // struct VecdStruct { x: Vec<u32> }
+    // let vecd_struct = VecdStruct { x: vec![4, 5] };
+    // assert_eq!(Ok(vecd_struct.clone()),
+    //     from_str("VecdStruct { 
+    //         x: [4, 5],
+    //     }")
+    // );
 
+    use crate::de::map::duplicates_aggregate;
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    struct VecdStruct2 { 
+        #[serde(deserialize_with = "duplicates_aggregate")]
+        x: HashMap<u32, Vec<u16>> 
+    }
+
+    let vecd_struct = VecdStruct2 { x: HashMap::from([(0, vec![1, 2]), (1, vec![2])]) };
     // Spaga Construction
     assert_eq!(Ok(vecd_struct),
-        from_str("VecdStruct { 
-            x: [4],
-            x: [5]
+        from_str("VecdStruct2 { 
+            x: {
+                0: 1,
+                1: 2,
+                0: 2
+            }
         }")
     );
 }
