@@ -1,7 +1,7 @@
 use super::*;
 
-use crate::error::{ Error, SpannedError, SpannedResult };
-use std::collections::HashMap;
+use crate::error::{ Error, SpannedError, SpannedResult, Position };
+use std::collections::{ HashSet, HashMap };
 use serde::Deserialize;
 use serde_bytes;
 
@@ -91,19 +91,19 @@ fn test_vecd_struct() {
     #[derive(Clone, Debug, PartialEq, Deserialize)]
     struct VecdStruct { x: Vec<u32> }
     let vecd_struct = VecdStruct { x: vec![4, 5] };
-    assert_eq!(Ok(vecd_struct),
+    assert_eq!(Ok(vecd_struct.clone()),
         from_str("VecdStruct { 
             x: [4, 5],
         }")
     );
 
     // Spaga Construction
-    // assert_eq!(Ok(vecd_struct.clone()),
-    //     from_str("VecdStruct { 
-    //         x: [4],
-    //         x: [5]
-    //     }")
-    // );
+    assert_eq!(Ok(vecd_struct),
+        from_str("VecdStruct { 
+            x: [4],
+            x: [5]
+        }")
+    );
 }
 
 #[test]
@@ -213,6 +213,12 @@ fn test_char() {
     assert_eq!(Ok('c'), from_str("'c'"));
     assert_eq!(Ok('朦'), from_str("朦"));
     assert_eq!(Ok('\''), from_str::<char>("'\\''"));
+}
+
+#[test]
+fn test_bool() {
+    assert_eq!(Ok(true), from_str("true"));
+    assert_eq!(Ok(false), from_str("false"));
 }
 
 #[test]
@@ -379,23 +385,39 @@ fn test_any_number_precision() {
     assert_eq!(de_any_number("0.3"), AnyNum::F64(0.3));
 }
 
-// #[test]
-// fn test_complex() {
-//     assert_eq!(
-//         ??
-//         from_str(
-//             "
-// Some([
-//     Room( width: 20, height: 5, name: \"The Room\" ),
-//     (
-//         width: 10.0,
-//         height: 10.0,
-//         name: \"Another room\",
-//         enemy_levels: {
-//             \"Enemy1\": 3,
-//             \"Enemy2\": 5,
-//             \"Enemy3\": 7,
-//         },
-//     ),
-// ])"))
-//     
+#[test]
+fn test_complex() {
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    pub struct Layout {
+        pub id: String,
+        pub levels: HashMap<u16, HashSet<usize>>,    
+        pub keys: HashMap<u16, Vec<Option<String>>>
+    }
+
+    let layout = Layout {
+        id: String::from("bu"),
+        levels: HashMap::from([(1, HashSet::from([])), (2, HashSet::from([0, 1]))]),
+        keys: HashMap::from([
+            (49, vec![Some(1.to_string()), Some(2.to_string()), Some(3.to_string()), Some(4.to_string())]),
+            (69, vec![Some(1.to_string()), Some(2.to_string()), Some(3.to_string()), Some(4.to_string())])
+        ])
+    };
+
+    assert_eq!(
+        Ok(layout),
+        from_str("
+{
+    id: bu,
+
+    levels: {
+        1: [],
+        2: [ 0, 1 ],
+    },
+
+    keys: {
+        49: [         1 ,         2,         3,          4 ],
+        69: [         1 ,         2,         3,     4           ],
+    },
+}
+"))
+}   

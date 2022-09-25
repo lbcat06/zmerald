@@ -14,7 +14,7 @@ use crate::parse::{ AnyNum, Bytes, ParsedStr };
 use serde::de::{ self, DeserializeSeed, Deserializer as SerdeError, Visitor };
 use std::{ borrow::Cow, io, str };
 
-pub fn from_reader<R, T>(mut rdr: R) -> SpannedResult<T> where R: std::io::Read, T: de::DeserializeOwned {
+pub fn from_reader<R, T>(mut rdr: R) -> SpannedResult<T> where R: io::Read, T: de::DeserializeOwned {
     let mut bytes = Vec::new();
     rdr.read_to_end(&mut bytes)?;
 
@@ -29,25 +29,11 @@ pub fn from_bytes<'a, T>(s: &'a [u8]) -> SpannedResult<T> where T: de::Deseriali
     from_bytes_seed(s, std::marker::PhantomData)
 }
 
-pub fn from_reader_seed<R, S, T>(mut rdr: R, seed: S) -> SpannedResult<T>
-where R: io::Read, S: for<'a> de::DeserializeSeed<'a, Value = T> {
-    let mut bytes = Vec::new();
-    rdr.read_to_end(&mut bytes)?;
-
-    from_bytes_seed(&bytes, seed)
-}
-
-pub fn from_str_seed<'a, S, T>(s: &'a str, seed: S) -> SpannedResult<T>
-where S: de::DeserializeSeed<'a, Value = T> {
-    from_bytes_seed(s.as_bytes(), seed)
-}
-
 pub fn from_bytes_seed<'a, S, T>(s: &'a [u8], seed: S) -> SpannedResult<T>
 where S: de::DeserializeSeed<'a, Value = T> {
     let mut deserializer = Deserializer::from_bytes(s)?;
     let value = seed.deserialize(&mut deserializer).map_err(|e| deserializer.span_error(e))?;
     deserializer.end().map_err(|e| deserializer.span_error(e))?;
-
     Ok(value)
 }
 
@@ -63,7 +49,7 @@ impl<'de> Deserializer<'de> {
     pub fn from_bytes(input: &'de [u8]) -> SpannedResult<Self> {
         let deserializer = Deserializer {
             bytes: Bytes::new(input)?,
-        };//.conjure()?;
+        };
 
         Ok(deserializer)
     }
@@ -78,8 +64,7 @@ impl<'de> Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
-    /// Check if the remaining bytes are whitespace only,
-    /// otherwise return an error.
+    /// Check if the remaining bytes are whitespace only, otherwise return an error.
     pub fn end(&mut self) -> Result<()> {
         self.bytes.skip_ws()?;
 
@@ -90,11 +75,6 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    /// Called from `deserialize_any` when a struct was detected. Decides if
-    /// there is a unit, tuple or usual struct and deserializes it
-    /// accordingly.
-    ///
-    /// This method assumes there is no identifier left.
     fn handle_other_structs<V>(&mut self, visitor: V) -> Result<V::Value>
     where V: Visitor<'de> {
         let mut bytes = self.bytes;
@@ -111,42 +91,36 @@ impl<'de> Deserializer<'de> {
             visitor.visit_unit()
         }
     }
-
-    // Called from `deserialize_struct`, `struct_variant`, and `handle_any_struct`.
-    // Handles deserialising the enclosing parentheses and everything in between.
-    //
-    // This method assumes there is no struct name identifier left.
-    // fn handle_struct_after_name<V>(&mut self, name_for_pretty_errors_only: &'static str, visitor: V) -> Result<V::Value>
-    // where V: Visitor<'de> {
-    //     if self.bytes.consume("(") {
-    //         let value = visitor
-    //             .visit_map(CommaSeparated::new(b')', self))
-    //             .map_err(|err| {
-    //                 struct_error_name(
-    //                     err,
-    //                     if !name_for_pretty_errors_only.is_empty() {
-    //                         Some(name_for_pretty_errors_only)
-    //                     } else {
-    //                         None
-    //                     },
-    //                 )
-    //             })?;
-
-    //         self.bytes.comma()?;
-
-    //         if self.bytes.consume(")") {
-    //             Ok(value)
-    //         } else {
-    //             Err(Error::ExpectedStructEnd)
-    //         }
-    //     } else if name_for_pretty_errors_only.is_empty() {
-    //         Err(Error::ExpectedStruct)
-    //     } else {
-    //         Err(Error::ExpectedNamedStruct(name_for_pretty_errors_only))
-    //     }
-    // }
 }
 
+// impl<'de, 'a> de::Deserialize<'de> for &'a mut Deserializer<'de> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: de::Deserializer<'de> {
+//         struct Visitor;
+
+//         impl<'de, 'a> de::Visitor<'de> for &'a mut Deserializer<'de> {
+//             type Value = &'a mut Deserializer<'de>;
+
+//             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+//                 formatter.write_str("stuff")
+//             }
+//         }
+
+//         fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
+//             todo!();
+
+//             let mut res: Map = Map::new();
+//             while let Some(entry) = map.next_entry()? {
+//                 res.insert(entry.0, entry.1);
+//             }
+
+//             Ok(Value::Map(res))
+//         }
+
+//         todo!()
+//     }
+// }
+
+// need to edit the visit_map() of the below Visitor, how does one do that?
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
@@ -170,9 +144,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
 
         // `identifier` does not change state if it fails
-        let ident = self.bytes.identifier().ok();
-
-        if ident.is_some() {
+        if self.bytes.identifier().ok().is_some() {
             self.bytes.skip_ws()?;
             return self.handle_other_structs(visitor);
         }
@@ -375,8 +347,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
-    where V: Visitor<'de> {
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value> where V: Visitor<'de> {
         if self.bytes.consume("{") {
             let value = visitor.visit_map(CommaSeparated::new(b'}', self))?;
             self.bytes.comma()?;
@@ -387,13 +358,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 Err(Error::ExpectedMapEnd)
             }
         } else {
-
-        // if V::Value::Unit.is_nested() {
-            // let value = visitor.visit_map(CommaSeparated::new(b';', &mut self))?;
-            // self.bytes.consume(";");
-            // return Ok(value);
-        // }
-
             Err(Error::ExpectedMap)
         }
     }
@@ -402,14 +366,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.bytes.consume_struct_name(name)?;
         self.bytes.skip_ws()?;
 
-        // self.handle_struct_after_name(name, visitor)
-
         if self.bytes.consume("{") {
-            //to prevent duplicated error i need to reimplement whatever the below method is
             let value = visitor.visit_map(CommaSeparated::new(b'}', self))?;
             self.bytes.comma()?;
 
             if self.bytes.consume("}") {
+                // duplicate error occurs after this is returned
                 Ok(value)
             } else {
                 Err(Error::ExpectedStructEnd)

@@ -425,34 +425,6 @@ impl<'a> Bytes<'a> {
         }
 
         Ok(true)
-
-        // todo!()
-
-        // if self.check_ident("") {
-        //     Ok(false)
-        // } else if self.check_ident(ident) {
-        //     self.advance(ident.len())?;
-        //     Ok(true)
-        // } else if ident.is_empty() {
-        //     Err(Error::ExpectedStruct)
-        // } else {
-        //     // Create a working copy
-        //     let mut bytes = *self;
-
-        //     // If the following is not even an identifier, then a missing
-        //     //  opening `{` seems more likely
-        //     let maybe_ident = bytes.identifier().map_err(|e| Error {
-        //         code: Error::ExpectedNamedStruct(ident),
-        //         position: e.position,
-        //     })?;
-
-        //     let found = std::str::from_utf8(maybe_ident).map_err(|e| bytes.error(e.into()))?;
-
-        //     Err(Error::ExpectedDifferentStructName {
-        //         expected: ident,
-        //         found: String::from(found),
-        //     })
-        // }
     }
 
     pub fn consume(&mut self, s: &str) -> bool {
@@ -464,20 +436,6 @@ impl<'a> Bytes<'a> {
             false
         }
     }
-
-    // fn consume_all(&mut self, all: &[&str]) -> Result<bool> {
-    //     all.iter()
-    //         .map(|elem| {
-    //             if self.consume(elem) {
-    //                 self.skip_ws()?;
-
-    //                 Ok(true)
-    //             } else {
-    //                 Ok(false)
-    //             }
-    //         })
-    //         .fold(Ok(true), |acc, x| acc.and_then(|val| x.map(|x| x && val)))
-    // }
 
     pub fn dollar(&mut self) -> Result<Option<(String, String)>> {
         todo!()

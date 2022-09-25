@@ -101,8 +101,8 @@ impl<'de> Visitor<'de> for ValueVisitor {
     }
 
     fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
+        // put in spaga logic
         let mut res: Map = Map::new();
-
         while let Some(entry) = map.next_entry()? {
             res.insert(entry.0, entry.1);
         }
@@ -110,36 +110,3 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::Map(res))
     }
 }
-
-// impl<'de, D> Visitor<'de> for ValueVisitor where D: Deserialize<'de> {
-//     // type Value = TaggedContent<'de, T>;
-//     type Value = Value;
-
-//     fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
-//     where M: MapAccess<'de> {
-//         todo!()
-//     //     let mut tag = None;
-//     //     let mut vec = Vec::with_capacity(size_hint::cautious(map.size_hint()));
-//     //     while let Some(k) = try!(map.next_key_seed(TagOrContentVisitor::new(self.tag_name))) {
-//     //         match k {
-//     //             TagOrContent::Tag => {
-//     //                 if tag.is_some() {
-//     //                     return Err(de::Error::duplicate_field(self.tag_name));
-//     //                 }
-//     //                 tag = Some(try!(map.next_value()));
-//     //             }
-//     //             TagOrContent::Content(k) => {
-//     //                 let v = try!(map.next_value());
-//     //                 vec.push((k, v));
-//     //             }
-//     //         }
-//     //     }
-//     //     match tag {
-//     //         None => Err(de::Error::missing_field(self.tag_name)),
-//     //         Some(tag) => Ok(TaggedContent {
-//     //             tag: tag,
-//     //             content: Content::Map(vec),
-//     //         }),
-//     //     }
-//     }
-// }
