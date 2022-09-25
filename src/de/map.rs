@@ -73,16 +73,3 @@ pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where T: Serialize, S: Serializer {
     value.serialize(serializer)
 }
-
-
-
-
-        // use std::collections::hash_map::Entry;
-
-        // match self.entry(key) {
-        //     // we want to keep the first value, so do nothing
-        //     Entry::Occupied(_) => {}
-        //     Entry::Vacant(vacant) => {
-        //         vacant.insert(value);
-        //     }
-        // }

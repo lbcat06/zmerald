@@ -87,25 +87,33 @@ fn test_struct() {
 }
 
 #[test]
-fn test_vecd_struct() {
-    // #[derive(Clone, Debug, PartialEq, Deserialize)]
-    // struct VecdStruct { x: Vec<u32> }
-    // let vecd_struct = VecdStruct { x: vec![4, 5] };
+fn test_vec_in_map() {
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    struct VecdStruct { x: Vec<u32> }
+    let vecd_struct = VecdStruct { x: vec![4, 5] };
+    assert_eq!(Ok(vecd_struct.clone()),
+        from_str("VecdStruct { 
+            x: [4, 5],
+        }")
+    );
+
+    // Spaga Construction must apply the DuplicatesAggregate deserialisation
+    // implementation which is not currently possible on a struct
     // assert_eq!(Ok(vecd_struct.clone()),
     //     from_str("VecdStruct { 
-    //         x: [4, 5],
+    //         x: [ 4 ],
+    //         x: [ 5 ],
     //     }")
     // );
+    // Therefore, for now we'll test it inside a HashMap instead of a struct.
 
-    use crate::de::map::duplicates_aggregate;
     #[derive(Clone, Debug, PartialEq, Deserialize)]
     struct VecdStruct2 { 
-        #[serde(deserialize_with = "duplicates_aggregate")]
+        #[serde(deserialize_with = "crate::de::map::duplicates_aggregate")]
         x: HashMap<u32, Vec<u16>> 
     }
 
     let vecd_struct = VecdStruct2 { x: HashMap::from([(0, vec![1, 2]), (1, vec![2])]) };
-    // Spaga Construction
     assert_eq!(Ok(vecd_struct),
         from_str("VecdStruct2 { 
             x: {
@@ -157,27 +165,44 @@ fn test_nested_map() {
         }")
     );
 
+    // Spaga Construction must apply the DuplicatesAggregate deserialisation
+    // implementation which is not currently possible on a struct
+    // Therefore, for now we'll test it inside a HashMap instead of a struct.
+    #[derive(Clone, Debug, PartialEq, Deserialize)]
+    struct NestedMap { 
+        #[serde(deserialize_with = "crate::de::map::duplicates_aggregate")]
+        x: HashMap<String, HashMap<u16, u8>> 
+    }
+
+    let nested_map = NestedMap { x: HashMap::from([("first".to_string(), HashMap::from([(4, 5), (6, 9)]))]) };
+    
     // Spaga Construction
-    // assert_eq!(Ok(map),
-    //     from_str("{
-    //         first 4: 5,
-    //         first 6: 9,
-    //     }")
+    // assert_eq!(Ok(&nested_map),
+    //     from_str("{ 
+    //         x: {
+    //             first: { 4: 5 },
+    //             first: { 6: 9 }
+    //         }
+    //     }").as_ref()
     // );
 
     // Cavetta + Spaga Construction
-    // assert_eq!(Ok(map),
+    // assert_eq!(Ok(&nested_map),
     //     from_str("{
-    //         first [<4> 5],
-    //         first [<6> 9],
-    //     }")
+    //         x: {
+    //             first { <4> 5 },
+    //             first { <6> 9 },
+    //         }
+    //     }").as_ref()
     // );
 
     // Spagetta Construction
-    // assert_eq!(Ok(map),
+    // assert_eq!(Ok(nested_map),
     //     from_str("{
-    //         first <4> 5,
-    //         first <6> 9,
+    //         x: {
+    //             first <4> 5,
+    //             first <6> 9,
+    //         }
     //     }")
     // );
 }
